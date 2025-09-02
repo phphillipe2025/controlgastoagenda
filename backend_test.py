@@ -398,6 +398,12 @@ def main():
     print(f"Test user: {test_user}")
     print(f"Test email: {test_email}")
 
+    # Test 0: Health check first
+    health_success, _ = tester.run_test("API Health Check", "GET", "health", 200)
+    if not health_success:
+        print("❌ API health check failed, stopping tests")
+        return 1
+
     # Test 1: User Registration (or login if exists)
     if not tester.test_register(test_user, test_email, test_password):
         print("⚠️  Registration failed, trying login...")
