@@ -323,6 +323,52 @@ async def delete_expense(expense_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Expense not found")
     return {"message": "Expense deleted successfully"}
 
+# Installment expenses endpoints
+@api_router.post("/installment-expenses", response_model=InstallmentExpense)
+async def create_installment_expense(expense_data: InstallmentExpenseCreate, current_user: dict = Depends(get_current_user)):
+    category = expense_data.category
+    if not category:
+        category = await categorize_expense_with_ai(expense_data.description, expense_data.total_amount)
+    
+    monthly_amount = expense_data.total_amount / expense_data.installments
+    
+    installment_expense = InstallmentExpense(
+        user_id=current_user["id"],
+        description=expense_data.description,
+        total_amount=expense_data.total_amount,
+        installments=expense_data.installments,
+        monthly_amount=monthly_amount,
+        category=category
+    )
+    
+    # Create the installment expense record
+    installment_dict = prepare_for_mongo(installment_expense.dict())
+    await db.installment_expenses.insert_one(installment_dict)
+    
+    # Create individual expenses for each month
+    current_date = datetime.now(timezone.utc)
+    for i in range(expense_data.installments):
+        month_offset = i
+        expense_date = current_date.replace(month=current_date.month + month_offset) if current_date.month + month_offset <= 12 else current_date.replace(year=current_date.year + 1, month=(current_date.month + month_offset) - 12)
+        
+        expense = Expense(
+            user_id=current_user["id"],
+            description=f"{expense_data.description} ({i+1}/{expense_data.installments})",
+            amount=monthly_amount,
+            category=category,
+            date=expense_date
+        )
+        
+        expense_dict = prepare_for_mongo(expense.dict())
+        await db.expenses.insert_one(expense_dict)
+    
+    return installment_expense
+
+@api_router.get("/installment-expenses", response_model=List[InstallmentExpense])
+async def get_installment_expenses(current_user: dict = Depends(get_current_user)):
+    installments = await db.installment_expenses.find({"user_id": current_user["id"]}).sort("created_at", -1).to_list(1000)
+    return [InstallmentExpense(**parse_from_mongo(installment)) for installment in installments]
+
 # AI endpoints
 @api_router.get("/ai/insights")
 async def get_insights(current_user: dict = Depends(get_current_user)):
