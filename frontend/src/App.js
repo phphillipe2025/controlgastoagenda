@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "./components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 import { Separator } from "./components/ui/separator";
+import { Textarea } from "./components/ui/textarea";
 import { toast, Toaster } from "sonner";
 import { Calendar } from "./components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
@@ -31,7 +32,12 @@ import {
   Wallet,
   TrendingDown,
   Repeat,
-  FileText
+  FileText,
+  Clock,
+  MapPin,
+  CheckCircle,
+  AlertCircle,
+  XCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -46,6 +52,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [installmentExpenses, setInstallmentExpenses] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [calendarData, setCalendarData] = useState(null);
   const [dashboardData, setDashboardData] = useState({});
   const [insights, setInsights] = useState("");
   const [predictions, setPredictions] = useState("");
@@ -76,6 +84,14 @@ function App() {
     salary: ""
   });
 
+  const [appointmentForm, setAppointmentForm] = useState({
+    title: "",
+    description: "",
+    date: new Date(),
+    time: "",
+    location: ""
+  });
+
   // Date picker states
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [endDate, setEndDate] = useState(new Date());
@@ -85,6 +101,7 @@ function App() {
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   // Check if user is logged in
   useEffect(() => {
@@ -100,6 +117,8 @@ function App() {
       await Promise.all([
         loadExpenses(),
         loadInstallmentExpenses(),
+        loadAppointments(),
+        loadCalendarData(),
         loadDashboardData(),
         loadInsights(),
         loadSalary()
@@ -127,6 +146,24 @@ function App() {
       setInstallmentExpenses(response.data);
     } catch (error) {
       console.error('Error loading installment expenses:', error);
+    }
+  };
+
+  const loadAppointments = async () => {
+    try {
+      const response = await axios.get(`${API}/appointments`);
+      setAppointments(response.data);
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+    }
+  };
+
+  const loadCalendarData = async () => {
+    try {
+      const response = await axios.get(`${API}/calendar/spending`);
+      setCalendarData(response.data);
+    } catch (error) {
+      console.error('Error loading calendar data:', error);
     }
   };
 
@@ -259,11 +296,47 @@ function App() {
       });
       
       setIsSalaryModalOpen(false);
-      await loadDashboardData();
+      await loadUserData();
       
       toast.success("Salário atualizado com sucesso!");
     } catch (error) {
       toast.error("Erro ao atualizar salário");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddAppointment = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const data = {
+        title: appointmentForm.title,
+        description: appointmentForm.description,
+        date: appointmentForm.date.toISOString(),
+        time: appointmentForm.time,
+        location: appointmentForm.location
+      };
+      
+      await axios.post(`${API}/appointments`, data);
+      
+      // Reset form
+      setAppointmentForm({
+        title: "",
+        description: "",
+        date: new Date(),
+        time: "",
+        location: ""
+      });
+      setIsAppointmentModalOpen(false);
+      
+      // Reload data
+      await loadAppointments();
+      
+      toast.success("Compromisso agendado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao agendar compromisso");
     } finally {
       setLoading(false);
     }
@@ -276,6 +349,16 @@ function App() {
       toast.success("Gasto removido com sucesso!");
     } catch (error) {
       toast.error("Erro ao remover gasto");
+    }
+  };
+
+  const handleDeleteAppointment = async (appointmentId) => {
+    try {
+      await axios.delete(`${API}/appointments/${appointmentId}`);
+      await loadAppointments();
+      toast.success("Compromisso removido com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao remover compromisso");
     }
   };
 
@@ -326,6 +409,8 @@ function App() {
     setUser(null);
     setExpenses([]);
     setInstallmentExpenses([]);
+    setAppointments([]);
+    setCalendarData(null);
     setDashboardData({});
     setInsights("");
     setPredictions("");
@@ -343,6 +428,10 @@ function App() {
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
+  const formatTime = (timeString) => {
+    return timeString.substring(0, 5); // HH:MM
+  };
+
   const getCategoryColor = (category) => {
     const colors = {
       'Alimentação': 'bg-green-100 text-green-800',
@@ -357,6 +446,40 @@ function App() {
       'Outros': 'bg-gray-100 text-gray-800'
     };
     return colors[category] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getDayStatusColor = (day) => {
+    if (!day) return 'bg-gray-100';
+    
+    if (day.is_past) {
+      return day.spent > 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600';
+    } else if (day.is_today) {
+      return day.available > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800';
+    } else {
+      return day.available > 0 ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800';
+    }
+  };
+
+  const getDayStatusIcon = (day) => {
+    if (!day) return null;
+    
+    if (day.is_past) {
+      return day.spent > 0 ? <XCircle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />;
+    } else if (day.is_today) {
+      return <AlertCircle className="w-3 h-3" />;
+    } else {
+      return day.available > 0 ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />;
+    }
+  };
+
+  const getAppointmentsForDay = (day) => {
+    if (!calendarData || !appointments) return [];
+    
+    const dayDate = new Date(calendarData.year, calendarData.month - 1, day);
+    return appointments.filter(apt => {
+      const aptDate = new Date(apt.date);
+      return aptDate.toDateString() === dayDate.toDateString();
+    });
   };
 
   // If not logged in, show auth form
@@ -625,6 +748,85 @@ function App() {
                 </form>
               </DialogContent>
             </Dialog>
+
+            <Dialog open={isAppointmentModalOpen} onOpenChange={setIsAppointmentModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <CalendarIcon className="w-4 h-4" />
+                  Novo Compromisso
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Agendar Compromisso</DialogTitle>
+                  <DialogDescription>
+                    Adicione um novo compromisso à sua agenda
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddAppointment} className="space-y-4">
+                  <div>
+                    <Label htmlFor="apt_title">Título</Label>
+                    <Input
+                      id="apt_title"
+                      value={appointmentForm.title}
+                      onChange={(e) => setAppointmentForm({...appointmentForm, title: e.target.value})}
+                      placeholder="Ex: Reunião importante"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="apt_description">Descrição</Label>
+                    <Textarea
+                      id="apt_description"
+                      value={appointmentForm.description}
+                      onChange={(e) => setAppointmentForm({...appointmentForm, description: e.target.value})}
+                      placeholder="Detalhes do compromisso"
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <Label>Data</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {appointmentForm.date ? format(appointmentForm.date, "PPP", { locale: ptBR }) : "Selecione a data"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar 
+                          mode="single" 
+                          selected={appointmentForm.date} 
+                          onSelect={(date) => setAppointmentForm({...appointmentForm, date: date || new Date()})} 
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <Label htmlFor="apt_time">Horário</Label>
+                    <Input
+                      id="apt_time"
+                      type="time"
+                      value={appointmentForm.time}
+                      onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="apt_location">Local (opcional)</Label>
+                    <Input
+                      id="apt_location"
+                      value={appointmentForm.location}
+                      onChange={(e) => setAppointmentForm({...appointmentForm, location: e.target.value})}
+                      placeholder="Ex: Escritório, Casa, Online"
+                    />
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Agendando..." : "Agendar Compromisso"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
             
             <Button variant="outline" onClick={logout}>
               <LogOut className="w-4 h-4 mr-2" />
@@ -698,8 +900,9 @@ function App() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="expenses" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
+          <TabsList className="grid w-full grid-cols-6 lg:w-[720px]">
             <TabsTrigger value="expenses">Gastos</TabsTrigger>
+            <TabsTrigger value="calendar">Calendário</TabsTrigger>
             <TabsTrigger value="installments">Parcelados</TabsTrigger>
             <TabsTrigger value="insights">Insights IA</TabsTrigger>
             <TabsTrigger value="analytics">Análises</TabsTrigger>
@@ -752,6 +955,161 @@ function App() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="calendar" className="space-y-6">
+            <div className="grid gap-6">
+              {/* Calendar Summary */}
+              {calendarData && (
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarIcon className="w-5 h-5" />
+                      Calendário Inteligente - {new Date(calendarData.year, calendarData.month - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </CardTitle>
+                    <CardDescription>
+                      Veja quanto você pode gastar por dia baseado no seu saldo
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Dias Restantes</p>
+                        <p className="text-2xl font-bold text-blue-600">{calendarData.days_remaining}</p>
+                      </div>
+                      <div className="text-center p-4 bg-emerald-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Saldo Disponível</p>
+                        <p className="text-2xl font-bold text-emerald-600">{formatCurrency(calendarData.remaining_balance)}</p>
+                      </div>
+                      <div className="text-center p-4 bg-orange-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Por Dia</p>
+                        <p className="text-2xl font-bold text-orange-600">{formatCurrency(calendarData.daily_available)}</p>
+                      </div>
+                    </div>
+
+                    {/* Calendar Grid */}
+                    <div className="grid grid-cols-7 gap-2 mb-4">
+                      {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
+                        <div key={day} className="text-center font-medium text-gray-600 py-2">
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-2">
+                      {calendarData.calendar_data.map((day) => {
+                        const dayAppointments = getAppointmentsForDay(day.day);
+                        return (
+                          <div
+                            key={day.day}
+                            className={`min-h-[100px] p-2 rounded-lg border ${getDayStatusColor(day)} transition-all hover:shadow-md`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium">{day.day}</span>
+                              {getDayStatusIcon(day)}
+                            </div>
+                            
+                            <div className="text-xs space-y-1">
+                              {day.is_past && day.spent > 0 && (
+                                <div className="font-medium">
+                                  Gasto: {formatCurrency(day.spent)}
+                                </div>
+                              )}
+                              {(day.is_today || day.is_future) && day.available > 0 && (
+                                <div className="font-medium">
+                                  Disponível: {formatCurrency(day.available)}
+                                </div>
+                              )}
+                              
+                              {/* Appointments */}
+                              {dayAppointments.map((apt) => (
+                                <div key={apt.id} className="bg-white/50 rounded px-1 py-0.5 text-xs">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="w-2 h-2" />
+                                    {formatTime(apt.time)}
+                                  </div>
+                                  <div className="truncate">{apt.title}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-100 border border-green-200 rounded"></div>
+                        <span>Pode gastar</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-100 border border-blue-200 rounded"></div>
+                        <span>Hoje</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-red-100 border border-red-200 rounded"></div>
+                        <span>Já gastou</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-orange-100 border border-orange-200 rounded"></div>
+                        <span>Sem orçamento</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Appointments List */}
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Próximos Compromissos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {appointments.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">Nenhum compromisso agendado</p>
+                      <p className="text-sm text-gray-400">Clique em "Novo Compromisso" para agendar!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {appointments.slice(0, 5).map((appointment) => (
+                        <div key={appointment.id} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-medium text-gray-900">{appointment.title}</h3>
+                              <Badge variant="outline" className="text-xs">
+                                {formatDate(appointment.date)} {formatTime(appointment.time)}
+                              </Badge>
+                            </div>
+                            {appointment.description && (
+                              <p className="text-sm text-gray-600 mb-2">{appointment.description}</p>
+                            )}
+                            {appointment.location && (
+                              <div className="flex items-center gap-1 text-sm text-gray-500">
+                                <MapPin className="w-3 h-3" />
+                                {appointment.location}
+                              </div>
+                            )}
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteAppointment(appointment.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="installments" className="space-y-6">
