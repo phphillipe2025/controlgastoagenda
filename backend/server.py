@@ -317,12 +317,18 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         month_key = date_obj.strftime("%Y-%m")
         monthly_data[month_key] = monthly_data.get(month_key, 0) + exp["amount"]
     
+    # Parse recent expenses to remove ObjectIds
+    recent_expenses = []
+    for exp in expenses[:5]:
+        parsed_exp = parse_from_mongo(exp)
+        recent_expenses.append(parsed_exp)
+    
     return {
         "total_spent": total_spent,
         "total_expenses": len(expenses),
         "categories": categories,
         "monthly_data": monthly_data,
-        "recent_expenses": expenses[:5]
+        "recent_expenses": recent_expenses
     }
 
 # Include the router in the main app
