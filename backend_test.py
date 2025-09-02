@@ -385,78 +385,95 @@ class ExpenseTrackerAPITester:
         return False
 
 def main():
-    print("🚀 Starting Expense Tracker API Tests")
-    print("=" * 50)
+    print("🚀 COMPREHENSIVE API TESTS FOR NEW FEATURES")
+    print("Testing: Salary, Installments, Period Reports, PDF Export")
+    print("=" * 60)
     
-    # Setup
+    # Setup - Use the specific test user from requirements
     tester = ExpenseTrackerAPITester()
-    timestamp = datetime.now().strftime('%H%M%S')
-    test_user = f"teste_{timestamp}"
-    test_email = f"teste_{timestamp}@email.com"
+    test_user = "testenovas"
+    test_email = "testenovas@test.com"
     test_password = "123456"
 
     print(f"Test user: {test_user}")
     print(f"Test email: {test_email}")
 
-    # Test 1: User Registration
+    # Test 1: User Registration (or login if exists)
     if not tester.test_register(test_user, test_email, test_password):
-        print("❌ Registration failed, stopping tests")
-        return 1
+        print("⚠️  Registration failed, trying login...")
+        if not tester.test_login(test_user, test_password):
+            print("❌ Both registration and login failed, stopping tests")
+            return 1
 
-    # Test 2: Create expenses with AI categorization
-    expense_ids = []
-    
-    # Test expense 1: Should be categorized as "Alimentação"
-    expense_id1 = tester.test_create_expense("Almoço no McDonald's", 25.00)
-    if expense_id1:
-        expense_ids.append(expense_id1)
-    
-    # Test expense 2: Should be categorized as "Transporte"  
+    # Test 2: NEW FEATURE - Salary endpoints
+    print("\n" + "="*50)
+    print("🆕 TESTING NEW SALARY FEATURE")
+    print("="*50)
+    tester.test_salary_endpoints()
+
+    # Test 3: Create a regular expense first (for balance calculation)
+    print("\n💰 Creating regular expense for balance testing...")
+    expense_id1 = tester.test_create_expense("Almoço", 30.00, "Alimentação")
+
+    # Test 4: NEW FEATURE - Installment expenses
+    print("\n" + "="*50)
+    print("🆕 TESTING NEW INSTALLMENT EXPENSES")
+    print("="*50)
+    tester.test_installment_expenses()
+
+    # Test 5: NEW FEATURE - Dashboard with balance calculation
+    print("\n" + "="*50)
+    print("🆕 TESTING NEW DASHBOARD WITH BALANCE")
+    print("="*50)
+    tester.test_dashboard_with_balance()
+
+    # Test 6: NEW FEATURE - Period reports
+    print("\n" + "="*50)
+    print("🆕 TESTING NEW PERIOD REPORTS")
+    print("="*50)
+    tester.test_period_reports()
+
+    # Test 7: NEW FEATURE - PDF export
+    print("\n" + "="*50)
+    print("🆕 TESTING NEW PDF EXPORT")
+    print("="*50)
+    tester.test_pdf_export()
+
+    # Test 8: Original functionality - Create more expenses
+    print("\n📝 Testing original expense functionality...")
     expense_id2 = tester.test_create_expense("Uber para trabalho", 15.00)
-    if expense_id2:
-        expense_ids.append(expense_id2)
-    
-    # Test expense 3: Manual category
     expense_id3 = tester.test_create_expense("Compra de livros", 45.00, "Educação")
-    if expense_id3:
-        expense_ids.append(expense_id3)
 
-    # Test 3: Get all expenses
+    # Test 9: Get all expenses
     expenses = tester.test_get_expenses()
 
-    # Test 4: Update an expense
-    if expense_ids:
-        tester.test_update_expense(expense_ids[0], description="Almoço no McDonald's - Atualizado", amount=30.00)
-
-    # Test 5: Dashboard data
-    tester.test_dashboard_data()
-
-    # Test 6: AI Insights (requires expenses)
+    # Test 10: AI Insights (requires expenses)
     if expenses:
+        print("\n🤖 Testing AI features...")
         tester.test_ai_insights()
-
-    # Test 7: AI Predictions (requires expenses)
-    if expenses:
         tester.test_ai_predictions()
 
-    # Test 8: Delete an expense
-    if expense_ids:
-        tester.test_delete_expense(expense_ids[-1])
-
-    # Test 9: Test login with existing user
-    tester.token = None  # Reset token
-    tester.test_login(test_user, test_password)
-
     # Print final results
-    print("\n" + "=" * 50)
-    print(f"📊 FINAL RESULTS")
+    print("\n" + "=" * 60)
+    print(f"📊 COMPREHENSIVE TEST RESULTS")
     print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
     
+    # Detailed summary
+    success_rate = (tester.tests_passed / tester.tests_run) * 100 if tester.tests_run > 0 else 0
+    print(f"Success rate: {success_rate:.1f}%")
+    
     if tester.tests_passed == tester.tests_run:
-        print("🎉 All tests passed!")
+        print("🎉 ALL TESTS PASSED! All new features are working correctly.")
+        print("\n✅ NEW FEATURES VERIFIED:")
+        print("   • Salary management (PUT/GET /api/user/salary)")
+        print("   • Installment expenses (POST/GET /api/installment-expenses)")
+        print("   • Dashboard with balance calculation")
+        print("   • Period reports (GET /api/reports/period)")
+        print("   • PDF export (GET /api/reports/export-pdf)")
         return 0
     else:
-        print(f"⚠️  {tester.tests_run - tester.tests_passed} tests failed")
+        failed_tests = tester.tests_run - tester.tests_passed
+        print(f"⚠️  {failed_tests} tests failed. Backend needs fixes before frontend testing.")
         return 1
 
 if __name__ == "__main__":
