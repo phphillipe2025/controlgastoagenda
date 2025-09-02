@@ -564,14 +564,14 @@ class ExpenseTrackerAPITester:
         return False
 
 def main():
-    print("🚀 COMPREHENSIVE API TESTS FOR NEW FEATURES")
-    print("Testing: Salary, Installments, Period Reports, PDF Export")
-    print("=" * 60)
+    print("🚀 COMPREHENSIVE API TESTS FOR REVOLUTIONARY NEW FEATURES")
+    print("Testing: Calendar Intelligence, Appointments Agenda, Salary, Installments, Reports")
+    print("=" * 80)
     
     # Setup - Use the specific test user from requirements
     tester = ExpenseTrackerAPITester()
-    test_user = "testenovas"
-    test_email = "testenovas@test.com"
+    test_user = "calendario123"  # As specified in requirements
+    test_email = "calendario123@test.com"
     test_password = "123456"
 
     print(f"Test user: {test_user}")
@@ -590,75 +590,112 @@ def main():
             print("❌ Both registration and login failed, stopping tests")
             return 1
 
-    # Test 2: NEW FEATURE - Salary endpoints
+    # Test 2: NEW REVOLUTIONARY FEATURE - Salary endpoints (required for calendar)
+    print("\n" + "="*60)
+    print("🆕 TESTING SALARY FEATURE (Required for Calendar)")
+    print("="*60)
+    salary_success = tester.test_salary_endpoints()
+
+    # Test 3: Create expenses (required for calendar calculations)
+    print("\n💰 Creating expenses for calendar testing...")
+    expense_id1 = tester.test_create_expense("Supermercado", 200.00, "Alimentação")
+    expense_id2 = tester.test_create_expense("Transporte", 50.00, "Transporte")
+
+    # Test 4: NEW REVOLUTIONARY FEATURE - Calendar Spending Intelligence
+    print("\n" + "="*60)
+    print("🆕 TESTING REVOLUTIONARY CALENDAR SPENDING INTELLIGENCE!")
+    print("="*60)
+    calendar_success = tester.test_calendar_spending()
+
+    # Test 5: NEW REVOLUTIONARY FEATURE - Appointments Agenda
+    print("\n" + "="*60)
+    print("🆕 TESTING REVOLUTIONARY APPOINTMENTS AGENDA!")
+    print("="*60)
+    appointments_success = tester.test_appointments_crud()
+
+    # Test 6: Dashboard with balance calculation
     print("\n" + "="*50)
-    print("🆕 TESTING NEW SALARY FEATURE")
+    print("🆕 TESTING DASHBOARD WITH BALANCE")
     print("="*50)
-    tester.test_salary_endpoints()
+    dashboard_success = tester.test_dashboard_with_balance()
 
-    # Test 3: Create a regular expense first (for balance calculation)
-    print("\n💰 Creating regular expense for balance testing...")
-    expense_id1 = tester.test_create_expense("Almoço", 30.00, "Alimentação")
-
-    # Test 4: NEW FEATURE - Installment expenses
+    # Test 7: Installment expenses
     print("\n" + "="*50)
-    print("🆕 TESTING NEW INSTALLMENT EXPENSES")
+    print("🆕 TESTING INSTALLMENT EXPENSES")
     print("="*50)
-    tester.test_installment_expenses()
+    installment_success = tester.test_installment_expenses()
 
-    # Test 5: NEW FEATURE - Dashboard with balance calculation
+    # Test 8: Period reports
     print("\n" + "="*50)
-    print("🆕 TESTING NEW DASHBOARD WITH BALANCE")
+    print("🆕 TESTING PERIOD REPORTS")
     print("="*50)
-    tester.test_dashboard_with_balance()
+    reports_success = tester.test_period_reports()
 
-    # Test 6: NEW FEATURE - Period reports
+    # Test 9: PDF export
     print("\n" + "="*50)
-    print("🆕 TESTING NEW PERIOD REPORTS")
+    print("🆕 TESTING PDF EXPORT")
     print("="*50)
-    tester.test_period_reports()
+    pdf_success = tester.test_pdf_export()
 
-    # Test 7: NEW FEATURE - PDF export
-    print("\n" + "="*50)
-    print("🆕 TESTING NEW PDF EXPORT")
-    print("="*50)
-    tester.test_pdf_export()
+    # Test 10: Original functionality - More expenses
+    print("\n📝 Testing additional expense functionality...")
+    expense_id3 = tester.test_create_expense("Uber para trabalho", 15.00)
+    expense_id4 = tester.test_create_expense("Compra de livros", 45.00, "Educação")
 
-    # Test 8: Original functionality - Create more expenses
-    print("\n📝 Testing original expense functionality...")
-    expense_id2 = tester.test_create_expense("Uber para trabalho", 15.00)
-    expense_id3 = tester.test_create_expense("Compra de livros", 45.00, "Educação")
-
-    # Test 9: Get all expenses
+    # Test 11: Get all expenses
     expenses = tester.test_get_expenses()
 
-    # Test 10: AI Insights (requires expenses)
+    # Test 12: AI Insights (requires expenses)
     if expenses:
         print("\n🤖 Testing AI features...")
-        tester.test_ai_insights()
-        tester.test_ai_predictions()
+        ai_insights_success = tester.test_ai_insights()
+        ai_predictions_success = tester.test_ai_predictions()
 
     # Print final results
-    print("\n" + "=" * 60)
-    print(f"📊 COMPREHENSIVE TEST RESULTS")
+    print("\n" + "=" * 80)
+    print(f"📊 COMPREHENSIVE TEST RESULTS FOR REVOLUTIONARY FEATURES")
     print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
     
     # Detailed summary
     success_rate = (tester.tests_passed / tester.tests_run) * 100 if tester.tests_run > 0 else 0
     print(f"Success rate: {success_rate:.1f}%")
     
-    if tester.tests_passed == tester.tests_run:
-        print("🎉 ALL TESTS PASSED! All new features are working correctly.")
-        print("\n✅ NEW FEATURES VERIFIED:")
+    # Check critical revolutionary features
+    critical_features_passed = all([
+        calendar_success,
+        appointments_success,
+        salary_success,
+        dashboard_success
+    ])
+    
+    if tester.tests_passed == tester.tests_run and critical_features_passed:
+        print("🎉 ALL TESTS PASSED! REVOLUTIONARY FEATURES ARE WORKING!")
+        print("\n✅ REVOLUTIONARY FEATURES VERIFIED:")
+        print("   🌟 CALENDAR INTELLIGENCE - Daily spending calculations")
+        print("   🌟 APPOINTMENTS AGENDA - Complete CRUD functionality")
         print("   • Salary management (PUT/GET /api/user/salary)")
         print("   • Installment expenses (POST/GET /api/installment-expenses)")
         print("   • Dashboard with balance calculation")
         print("   • Period reports (GET /api/reports/period)")
         print("   • PDF export (GET /api/reports/export-pdf)")
+        print("\n🚀 READY FOR FRONTEND TESTING!")
         return 0
     else:
         failed_tests = tester.tests_run - tester.tests_passed
-        print(f"⚠️  {failed_tests} tests failed. Backend needs fixes before frontend testing.")
+        print(f"⚠️  {failed_tests} tests failed.")
+        
+        if not critical_features_passed:
+            print("❌ CRITICAL REVOLUTIONARY FEATURES FAILED:")
+            if not calendar_success:
+                print("   ❌ Calendar Intelligence not working")
+            if not appointments_success:
+                print("   ❌ Appointments Agenda not working")
+            if not salary_success:
+                print("   ❌ Salary management not working")
+            if not dashboard_success:
+                print("   ❌ Dashboard balance calculation not working")
+        
+        print("🔧 Backend needs fixes before frontend testing.")
         return 1
 
 if __name__ == "__main__":
