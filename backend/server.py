@@ -356,8 +356,16 @@ async def create_installment_expense(expense_data: InstallmentExpenseCreate, cur
     # Create individual expenses for each month
     current_date = datetime.now(timezone.utc)
     for i in range(expense_data.installments):
-        month_offset = i
-        expense_date = current_date.replace(month=current_date.month + month_offset) if current_date.month + month_offset <= 12 else current_date.replace(year=current_date.year + 1, month=(current_date.month + month_offset) - 12)
+        # Calculate the future date for each installment
+        future_year = current_date.year
+        future_month = current_date.month + i
+        
+        # Handle month overflow
+        while future_month > 12:
+            future_month -= 12
+            future_year += 1
+        
+        expense_date = current_date.replace(year=future_year, month=future_month)
         
         expense = Expense(
             user_id=current_user["id"],
