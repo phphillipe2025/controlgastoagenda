@@ -14,6 +14,14 @@ import jwt
 from passlib.context import CryptContext
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
+from fastapi.responses import FileResponse
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+import io
+import tempfile
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
