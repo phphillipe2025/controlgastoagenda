@@ -385,6 +385,46 @@ async def get_predictions(current_user: dict = Depends(get_current_user)):
     predictions = await predict_future_expenses(expenses)
     return {"predictions": predictions}
 
+# Period reports
+@api_router.get("/reports/period")
+async def get_period_report(start_date: str, end_date: str, current_user: dict = Depends(get_current_user)):
+    try:
+        start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format.")
+    
+    # Get expenses in the period
+    expenses = await db.expenses.find({
+        "user_id": current_user["id"],
+        "date": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}
+    }).to_list(1000)
+    
+    total_spent = sum(exp["amount"] for exp in expenses)
+    categories = {}
+    daily_data = {}
+    
+    for exp in expenses:
+        # Categories
+        cat = exp["category"]
+        categories[cat] = categories.get(cat, 0) + exp["amount"]
+        
+        # Daily data
+        date_obj = exp["date"]
+        if isinstance(date_obj, str):
+            date_obj = datetime.fromisoformat(date_obj.replace('Z', '+00:00'))
+        day_key = date_obj.strftime("%Y-%m-%d")
+        daily_data[day_key] = daily_data.get(day_key, 0) + exp["amount"]
+    
+    return {
+        "period": {"start": start_date, "end": end_date},
+        "total_spent": total_spent,
+        "total_expenses": len(expenses),
+        "categories": categories,
+        "daily_data": daily_data,
+        "expenses": [parse_from_mongo(exp) for exp in expenses]
+    }
+
 # Dashboard data
 @api_router.get("/dashboard")
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
