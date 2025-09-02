@@ -70,6 +70,7 @@ class User(BaseModel):
     username: str
     email: str
     password_hash: str
+    salary: Optional[float] = 0.0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
