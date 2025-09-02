@@ -334,6 +334,16 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         "recent_expenses": recent_expenses
     }
 
+# Add your routes to the router instead of directly to app
+@api_router.get("/")
+async def root():
+    return {"message": "Expense Tracker API is running!", "status": "healthy"}
+
+# Health check endpoint
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "API is running successfully"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
