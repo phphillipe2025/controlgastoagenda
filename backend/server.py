@@ -105,6 +105,31 @@ class ExpenseUpdate(BaseModel):
     amount: Optional[float] = None
     category: Optional[str] = None
 
+class SalaryUpdate(BaseModel):
+    salary: float
+
+class InstallmentExpense(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    description: str
+    total_amount: float
+    installments: int
+    current_installment: int = 1
+    monthly_amount: float
+    category: str
+    start_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class InstallmentExpenseCreate(BaseModel):
+    description: str
+    total_amount: float
+    installments: int
+    category: Optional[str] = None
+
+class PeriodFilter(BaseModel):
+    start_date: datetime
+    end_date: datetime
+
 class AIInsight(BaseModel):
     type: str  # "categorization", "suggestion", "prediction"
     message: str
