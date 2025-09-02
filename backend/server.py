@@ -138,6 +138,30 @@ class PeriodFilter(BaseModel):
     start_date: datetime
     end_date: datetime
 
+class Appointment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    title: str
+    description: Optional[str] = ""
+    date: datetime
+    time: str  # formato HH:MM
+    location: Optional[str] = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AppointmentCreate(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    date: datetime
+    time: str
+    location: Optional[str] = ""
+
+class AppointmentUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[datetime] = None
+    time: Optional[str] = None
+    location: Optional[str] = None
+
 class AIInsight(BaseModel):
     type: str  # "categorization", "suggestion", "prediction"
     message: str
