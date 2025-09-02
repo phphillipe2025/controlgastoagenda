@@ -208,6 +208,182 @@ class ExpenseTrackerAPITester:
             print(f"   Predictions: {predictions[:100]}...")
         return success
 
+    # NEW FEATURE TESTS
+    def test_salary_endpoints(self):
+        """Test salary PUT and GET endpoints"""
+        print("\n💰 TESTING NEW SALARY FUNCTIONALITY")
+        
+        # Test PUT /api/user/salary
+        salary_data = {"salary": 5000.00}
+        success_put, _ = self.run_test(
+            "Set Salary (PUT /user/salary)",
+            "PUT",
+            "user/salary", 
+            200,
+            data=salary_data
+        )
+        
+        # Test GET /api/user/salary
+        success_get, response = self.run_test(
+            "Get Salary (GET /user/salary)",
+            "GET",
+            "user/salary",
+            200
+        )
+        
+        if success_get and response.get('salary') == 5000.0:
+            print("✅ Salary correctly set and retrieved: R$ 5000.00")
+            return True
+        else:
+            print("❌ Salary not correctly set/retrieved")
+            return False
+
+    def test_installment_expenses(self):
+        """Test installment expenses endpoints"""
+        print("\n💳 TESTING NEW INSTALLMENT EXPENSES")
+        
+        # Test POST /api/installment-expenses
+        installment_data = {
+            "description": "Notebook",
+            "total_amount": 2400.00,
+            "installments": 12,
+            "category": "Tecnologia"
+        }
+        
+        success_post, response = self.run_test(
+            "Create Installment Expense (POST /installment-expenses)",
+            "POST",
+            "installment-expenses",
+            200,
+            data=installment_data
+        )
+        
+        # Test GET /api/installment-expenses
+        success_get, installments = self.run_test(
+            "Get Installment Expenses (GET /installment-expenses)",
+            "GET", 
+            "installment-expenses",
+            200
+        )
+        
+        if success_get and len(installments) > 0:
+            installment = installments[0]
+            expected_monthly = 2400.00 / 12
+            if abs(installment['monthly_amount'] - expected_monthly) < 0.01:
+                print(f"✅ Installment correctly calculated: R$ {installment['monthly_amount']:.2f}/month")
+                return True
+            else:
+                print(f"❌ Installment calculation wrong: expected {expected_monthly}, got {installment['monthly_amount']}")
+        
+        return False
+
+    def test_dashboard_with_balance(self):
+        """Test dashboard endpoint with new balance calculation"""
+        print("\n📈 TESTING NEW DASHBOARD WITH BALANCE")
+        
+        success, dashboard = self.run_test(
+            "Get Dashboard Data (GET /dashboard)",
+            "GET",
+            "dashboard",
+            200
+        )
+        
+        if success:
+            salary = dashboard.get('salary', 0)
+            current_month_spent = dashboard.get('current_month_spent', 0)
+            current_balance = dashboard.get('current_balance', 0)
+            
+            expected_balance = salary - current_month_spent
+            
+            print(f"   Salary: R$ {salary:.2f}")
+            print(f"   Current Month Spent: R$ {current_month_spent:.2f}")
+            print(f"   Current Balance: R$ {current_balance:.2f}")
+            print(f"   Expected Balance: R$ {expected_balance:.2f}")
+            
+            # Check if all new fields are present
+            required_fields = ['salary', 'current_balance', 'current_month_spent']
+            missing_fields = [field for field in required_fields if field not in dashboard]
+            
+            if missing_fields:
+                print(f"❌ Dashboard missing new fields: {missing_fields}")
+                return False
+            
+            if abs(current_balance - expected_balance) < 0.01:
+                print("✅ Balance calculation is correct")
+                return True
+            else:
+                print("❌ Balance calculation is incorrect")
+        
+        return False
+
+    def test_period_reports(self):
+        """Test new period reports endpoint"""
+        print("\n📊 TESTING NEW PERIOD REPORTS")
+        
+        # Test with current month
+        start_date = datetime.now().replace(day=1).isoformat()
+        end_date = datetime.now().isoformat()
+        
+        params = {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        success, report = self.run_test(
+            "Get Period Report (GET /reports/period)",
+            "GET",
+            "reports/period",
+            200,
+            params=params
+        )
+        
+        if success:
+            required_fields = ['period', 'total_spent', 'total_expenses', 'categories', 'daily_data', 'expenses']
+            missing_fields = [field for field in required_fields if field not in report]
+            
+            if not missing_fields:
+                print(f"✅ Report contains all required fields")
+                print(f"   Total spent: R$ {report['total_spent']:.2f}")
+                print(f"   Total expenses: {report['total_expenses']}")
+                print(f"   Categories: {len(report['categories'])}")
+                print(f"   Daily data points: {len(report['daily_data'])}")
+                return True
+            else:
+                print(f"❌ Report missing fields: {missing_fields}")
+        
+        return False
+
+    def test_pdf_export(self):
+        """Test new PDF export endpoint"""
+        print("\n📄 TESTING NEW PDF EXPORT")
+        
+        start_date = datetime.now().replace(day=1).isoformat()
+        end_date = datetime.now().isoformat()
+        
+        params = {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+        
+        success, pdf_content = self.run_test(
+            "Export PDF Report (GET /reports/export-pdf)",
+            "GET",
+            "reports/export-pdf",
+            200,
+            params=params,
+            response_type='binary'
+        )
+        
+        if success and pdf_content:
+            # Check if it's actually a PDF
+            if pdf_content[:4] == b'%PDF':
+                print(f"✅ PDF export successful, size: {len(pdf_content)} bytes")
+                return True
+            else:
+                print("❌ Response is not a valid PDF")
+        
+        return False
+
 def main():
     print("🚀 Starting Expense Tracker API Tests")
     print("=" * 50)
