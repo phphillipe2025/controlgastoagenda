@@ -384,6 +384,185 @@ class ExpenseTrackerAPITester:
         
         return False
 
+    def test_calendar_spending(self):
+        """Test NEW calendar spending endpoint - REVOLUTIONARY FEATURE"""
+        print("\n📅 TESTING NEW CALENDAR SPENDING - REVOLUTIONARY FEATURE!")
+        
+        success, calendar_data = self.run_test(
+            "Get Calendar Spending (GET /calendar/spending)",
+            "GET",
+            "calendar/spending",
+            200
+        )
+        
+        if success:
+            # Check required fields for calendar functionality
+            required_fields = ['month', 'year', 'salary', 'total_spent', 'remaining_balance', 
+                             'days_remaining', 'daily_available', 'calendar_data']
+            missing_fields = [field for field in required_fields if field not in calendar_data]
+            
+            if not missing_fields:
+                print(f"✅ Calendar data contains all required fields")
+                print(f"   Month/Year: {calendar_data['month']}/{calendar_data['year']}")
+                print(f"   Salary: R$ {calendar_data['salary']:.2f}")
+                print(f"   Total Spent: R$ {calendar_data['total_spent']:.2f}")
+                print(f"   Remaining Balance: R$ {calendar_data['remaining_balance']:.2f}")
+                print(f"   Days Remaining: {calendar_data['days_remaining']}")
+                print(f"   Daily Available: R$ {calendar_data['daily_available']:.2f}")
+                print(f"   Calendar Days: {len(calendar_data['calendar_data'])}")
+                
+                # Verify calendar calculation logic
+                expected_daily = calendar_data['remaining_balance'] / calendar_data['days_remaining'] if calendar_data['days_remaining'] > 0 else 0
+                actual_daily = calendar_data['daily_available']
+                
+                if abs(expected_daily - actual_daily) < 0.01:
+                    print("✅ Daily spending calculation is CORRECT!")
+                    
+                    # Check calendar_data structure
+                    if calendar_data['calendar_data']:
+                        first_day = calendar_data['calendar_data'][0]
+                        day_required_fields = ['day', 'spent', 'available', 'is_past', 'is_today', 'is_future', 'status']
+                        day_missing = [field for field in day_required_fields if field not in first_day]
+                        
+                        if not day_missing:
+                            print("✅ Calendar day structure is CORRECT!")
+                            print(f"   Sample day data: {first_day}")
+                            return True
+                        else:
+                            print(f"❌ Calendar day missing fields: {day_missing}")
+                    else:
+                        print("❌ Calendar data is empty")
+                else:
+                    print(f"❌ Daily calculation wrong: expected {expected_daily:.2f}, got {actual_daily:.2f}")
+            else:
+                print(f"❌ Calendar missing fields: {missing_fields}")
+        
+        return False
+
+    def test_appointments_crud(self):
+        """Test NEW appointments CRUD - AGENDA FUNCTIONALITY"""
+        print("\n📋 TESTING NEW APPOINTMENTS CRUD - AGENDA FUNCTIONALITY!")
+        
+        # Test POST /api/appointments - Create appointment
+        tomorrow = datetime.now() + timedelta(days=1)
+        appointment_data = {
+            "title": "Reunião Importante",
+            "description": "Reunião com cliente sobre projeto",
+            "date": tomorrow.isoformat(),
+            "time": "14:00",
+            "location": "Escritório Central"
+        }
+        
+        success_post, response = self.run_test(
+            "Create Appointment (POST /appointments)",
+            "POST",
+            "appointments",
+            200,
+            data=appointment_data
+        )
+        
+        appointment_id = None
+        if success_post and 'id' in response:
+            appointment_id = response['id']
+            print(f"✅ Appointment created with ID: {appointment_id}")
+            print(f"   Title: {response.get('title')}")
+            print(f"   Date: {response.get('date')}")
+            print(f"   Time: {response.get('time')}")
+        else:
+            print("❌ Failed to create appointment")
+            return False
+        
+        # Test GET /api/appointments - List appointments
+        success_get, appointments = self.run_test(
+            "Get All Appointments (GET /appointments)",
+            "GET",
+            "appointments",
+            200
+        )
+        
+        if success_get and len(appointments) > 0:
+            print(f"✅ Found {len(appointments)} appointments")
+            found_appointment = next((apt for apt in appointments if apt['id'] == appointment_id), None)
+            if found_appointment:
+                print("✅ Created appointment found in list")
+            else:
+                print("❌ Created appointment not found in list")
+                return False
+        else:
+            print("❌ No appointments found or request failed")
+            return False
+        
+        # Test GET /api/appointments/month - Get appointments by month
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        success_month, month_appointments = self.run_test(
+            f"Get Appointments by Month (GET /appointments/month)",
+            "GET",
+            "appointments/month",
+            200,
+            params={"month": current_month, "year": current_year}
+        )
+        
+        if success_month:
+            print(f"✅ Month appointments endpoint working, found {len(month_appointments)} appointments")
+        else:
+            print("❌ Month appointments endpoint failed")
+            return False
+        
+        # Test PUT /api/appointments/{id} - Update appointment
+        update_data = {
+            "title": "Reunião Atualizada",
+            "location": "Escritório Novo"
+        }
+        
+        success_put, updated = self.run_test(
+            f"Update Appointment (PUT /appointments/{appointment_id})",
+            "PUT",
+            f"appointments/{appointment_id}",
+            200,
+            data=update_data
+        )
+        
+        if success_put and updated.get('title') == "Reunião Atualizada":
+            print("✅ Appointment updated successfully")
+        else:
+            print("❌ Appointment update failed")
+            return False
+        
+        # Test DELETE /api/appointments/{id} - Delete appointment
+        success_delete, _ = self.run_test(
+            f"Delete Appointment (DELETE /appointments/{appointment_id})",
+            "DELETE",
+            f"appointments/{appointment_id}",
+            200
+        )
+        
+        if success_delete:
+            print("✅ Appointment deleted successfully")
+            
+            # Verify deletion
+            success_verify, verify_appointments = self.run_test(
+                "Verify Deletion (GET /appointments)",
+                "GET",
+                "appointments",
+                200
+            )
+            
+            if success_verify:
+                deleted_found = any(apt['id'] == appointment_id for apt in verify_appointments)
+                if not deleted_found:
+                    print("✅ Appointment deletion verified - not found in list")
+                    return True
+                else:
+                    print("❌ Appointment still exists after deletion")
+            else:
+                print("❌ Could not verify deletion")
+        else:
+            print("❌ Appointment deletion failed")
+        
+        return False
+
 def main():
     print("🚀 COMPREHENSIVE API TESTS FOR NEW FEATURES")
     print("Testing: Salary, Installments, Period Reports, PDF Export")
