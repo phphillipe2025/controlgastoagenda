@@ -570,6 +570,147 @@ async def export_period_report_pdf(start_date: str, end_date: str, current_user:
             filename=f"relatorio_financeiro_{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}.pdf"
         )
 
+# Calendar spending endpoint
+@api_router.get("/calendar/spending")
+async def get_calendar_spending(current_user: dict = Depends(get_current_user)):
+    # Get current month dates
+    current_date = datetime.now(timezone.utc)
+    start_of_month = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate end of month
+    if start_of_month.month == 12:
+        end_of_month = start_of_month.replace(year=start_of_month.year + 1, month=1)
+    else:
+        end_of_month = start_of_month.replace(month=start_of_month.month + 1)
+    
+    # Get current month expenses
+    current_month_expenses = await db.expenses.find({
+        "user_id": current_user["id"],
+        "date": {
+            "$gte": start_of_month.isoformat(),
+            "$lt": end_of_month.isoformat()
+        }
+    }).to_list(1000)
+    
+    # Get user salary
+    user = await db.users.find_one({"id": current_user["id"]})
+    salary = user.get("salary", 0.0)
+    
+    # Calculate totals
+    total_spent_this_month = sum(exp["amount"] for exp in current_month_expenses)
+    remaining_balance = salary - total_spent_this_month
+    
+    # Calculate days
+    import calendar
+    days_in_month = calendar.monthrange(current_date.year, current_date.month)[1]
+    days_passed = current_date.day - 1  # Days that already passed
+    days_remaining = days_in_month - current_date.day + 1  # Including today
+    
+    # Calculate daily spending
+    daily_spending_available = remaining_balance / days_remaining if days_remaining > 0 else 0
+    
+    # Group expenses by day
+    daily_expenses = {}
+    for exp in current_month_expenses:
+        date_obj = exp["date"]
+        if isinstance(date_obj, str):
+            date_obj = datetime.fromisoformat(date_obj.replace('Z', '+00:00'))
+        day_key = date_obj.day
+        daily_expenses[day_key] = daily_expenses.get(day_key, 0) + exp["amount"]
+    
+    # Generate calendar data
+    calendar_data = []
+    for day in range(1, days_in_month + 1):
+        spent_today = daily_expenses.get(day, 0)
+        is_past = day < current_date.day
+        is_today = day == current_date.day
+        is_future = day > current_date.day
+        
+        day_data = {
+            "day": day,
+            "spent": spent_today,
+            "available": daily_spending_available if not is_past else 0,
+            "is_past": is_past,
+            "is_today": is_today,
+            "is_future": is_future,
+            "status": "spent" if is_past else "available" if daily_spending_available > 0 else "no_budget"
+        }
+        calendar_data.append(day_data)
+    
+    return {
+        "month": current_date.month,
+        "year": current_date.year,
+        "salary": salary,
+        "total_spent": total_spent_this_month,
+        "remaining_balance": remaining_balance,
+        "days_remaining": days_remaining,
+        "daily_available": daily_spending_available,
+        "calendar_data": calendar_data
+    }
+
+# Appointments CRUD
+@api_router.post("/appointments", response_model=Appointment)
+async def create_appointment(appointment_data: AppointmentCreate, current_user: dict = Depends(get_current_user)):
+    appointment = Appointment(
+        user_id=current_user["id"],
+        title=appointment_data.title,
+        description=appointment_data.description,
+        date=appointment_data.date,
+        time=appointment_data.time,
+        location=appointment_data.location
+    )
+    
+    appointment_dict = prepare_for_mongo(appointment.dict())
+    await db.appointments.insert_one(appointment_dict)
+    return appointment
+
+@api_router.get("/appointments", response_model=List[Appointment])
+async def get_appointments(current_user: dict = Depends(get_current_user)):
+    appointments = await db.appointments.find({"user_id": current_user["id"]}).sort("date", 1).to_list(1000)
+    return [Appointment(**parse_from_mongo(appointment)) for appointment in appointments]
+
+@api_router.get("/appointments/month")
+async def get_appointments_by_month(month: int, year: int, current_user: dict = Depends(get_current_user)):
+    # Get appointments for specific month
+    start_date = datetime(year, month, 1, tzinfo=timezone.utc)
+    if month == 12:
+        end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end_date = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    
+    appointments = await db.appointments.find({
+        "user_id": current_user["id"],
+        "date": {
+            "$gte": start_date.isoformat(),
+            "$lt": end_date.isoformat()
+        }
+    }).sort("date", 1).to_list(1000)
+    
+    return [Appointment(**parse_from_mongo(appointment)) for appointment in appointments]
+
+@api_router.put("/appointments/{appointment_id}", response_model=Appointment)
+async def update_appointment(appointment_id: str, appointment_data: AppointmentUpdate, current_user: dict = Depends(get_current_user)):
+    appointment = await db.appointments.find_one({"id": appointment_id, "user_id": current_user["id"]})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    update_data = {k: v for k, v in appointment_data.dict().items() if v is not None}
+    if update_data:
+        # Convert datetime to ISO string if present
+        if 'date' in update_data:
+            update_data['date'] = update_data['date'].isoformat()
+        await db.appointments.update_one({"id": appointment_id}, {"$set": update_data})
+        appointment.update(update_data)
+    
+    return Appointment(**parse_from_mongo(appointment))
+
+@api_router.delete("/appointments/{appointment_id}")
+async def delete_appointment(appointment_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.appointments.delete_one({"id": appointment_id, "user_id": current_user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return {"message": "Appointment deleted successfully"}
+
 # Dashboard data
 @api_router.get("/dashboard")
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
