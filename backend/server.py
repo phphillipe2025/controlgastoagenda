@@ -541,13 +541,36 @@ async def export_period_report_pdf(start_date: str, end_date: str, current_user:
 # Dashboard data
 @api_router.get("/dashboard")
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
-    expenses = await db.expenses.find({"user_id": current_user["id"]}).to_list(1000)
+    # Get current month expenses
+    current_date = datetime.now(timezone.utc)
+    start_of_month = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end_of_month = (start_of_month.replace(month=start_of_month.month + 1) if start_of_month.month < 12 
+                   else start_of_month.replace(year=start_of_month.year + 1, month=1))
     
-    total_spent = sum(exp["amount"] for exp in expenses)
+    # All expenses
+    all_expenses = await db.expenses.find({"user_id": current_user["id"]}).to_list(1000)
+    
+    # Current month expenses
+    current_month_expenses = await db.expenses.find({
+        "user_id": current_user["id"],
+        "date": {
+            "$gte": start_of_month.isoformat(),
+            "$lt": end_of_month.isoformat()
+        }
+    }).to_list(1000)
+    
+    # Get user salary
+    user = await db.users.find_one({"id": current_user["id"]})
+    salary = user.get("salary", 0.0)
+    
+    total_spent = sum(exp["amount"] for exp in all_expenses)
+    current_month_spent = sum(exp["amount"] for exp in current_month_expenses)
+    current_balance = salary - current_month_spent
+    
     categories = {}
     monthly_data = {}
     
-    for exp in expenses:
+    for exp in all_expenses:
         # Categories
         cat = exp["category"]
         categories[cat] = categories.get(cat, 0) + exp["amount"]
@@ -561,13 +584,16 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     
     # Parse recent expenses to remove ObjectIds
     recent_expenses = []
-    for exp in expenses[:5]:
+    for exp in all_expenses[:5]:
         parsed_exp = parse_from_mongo(exp)
         recent_expenses.append(parsed_exp)
     
     return {
         "total_spent": total_spent,
-        "total_expenses": len(expenses),
+        "current_month_spent": current_month_spent,
+        "salary": salary,
+        "current_balance": current_balance,
+        "total_expenses": len(all_expenses),
         "categories": categories,
         "monthly_data": monthly_data,
         "recent_expenses": recent_expenses
