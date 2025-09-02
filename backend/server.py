@@ -200,6 +200,20 @@ async def login(user_data: UserLogin):
     access_token = create_access_token(data={"sub": user["id"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
+# Salary endpoints
+@api_router.put("/user/salary")
+async def update_salary(salary_data: SalaryUpdate, current_user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": current_user["id"]}, 
+        {"$set": {"salary": salary_data.salary}}
+    )
+    return {"message": "Salário atualizado com sucesso", "salary": salary_data.salary}
+
+@api_router.get("/user/salary")
+async def get_salary(current_user: dict = Depends(get_current_user)):
+    user = await db.users.find_one({"id": current_user["id"]})
+    return {"salary": user.get("salary", 0.0)}
+
 # AI Integration functions
 async def categorize_expense_with_ai(description: str, amount: float) -> str:
     try:
