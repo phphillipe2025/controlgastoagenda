@@ -433,6 +433,111 @@ async def get_period_report(start_date: str, end_date: str, current_user: dict =
         "expenses": [parse_from_mongo(exp) for exp in expenses]
     }
 
+# PDF Export
+@api_router.get("/reports/export-pdf")
+async def export_period_report_pdf(start_date: str, end_date: str, current_user: dict = Depends(get_current_user)):
+    try:
+        start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format.")
+    
+    # Get report data
+    expenses = await db.expenses.find({
+        "user_id": current_user["id"],
+        "date": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}
+    }).to_list(1000)
+    
+    # Get user data
+    user = await db.users.find_one({"id": current_user["id"]})
+    
+    # Create PDF
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+        doc = SimpleDocTemplate(tmp_file.name, pagesize=A4)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=1  # Center alignment
+        )
+        
+        title = Paragraph(f"Relatório Financeiro - {start_dt.strftime('%d/%m/%Y')} a {end_dt.strftime('%d/%m/%Y')}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Summary
+        total_spent = sum(exp["amount"] for exp in expenses)
+        user_salary = user.get("salary", 0.0)
+        balance = user_salary - total_spent
+        
+        summary_data = [
+            ["Salário Mensal:", f"R$ {user_salary:.2f}"],
+            ["Total de Gastos:", f"R$ {total_spent:.2f}"],
+            ["Saldo:", f"R$ {balance:.2f}"],
+            ["Número de Transações:", str(len(expenses))]
+        ]
+        
+        summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        elements.append(summary_table)
+        elements.append(Spacer(1, 12))
+        
+        # Expenses table
+        if expenses:
+            elements.append(Paragraph("Detalhes dos Gastos:", styles['Heading2']))
+            elements.append(Spacer(1, 12))
+            
+            expense_data = [["Data", "Descrição", "Categoria", "Valor"]]
+            for exp in expenses:
+                date_obj = exp["date"]
+                if isinstance(date_obj, str):
+                    date_obj = datetime.fromisoformat(date_obj.replace('Z', '+00:00'))
+                
+                expense_data.append([
+                    date_obj.strftime('%d/%m/%Y'),
+                    exp["description"][:30] + "..." if len(exp["description"]) > 30 else exp["description"],
+                    exp["category"],
+                    f"R$ {exp['amount']:.2f}"
+                ])
+            
+            expense_table = Table(expense_data, colWidths=[1.2*inch, 2.5*inch, 1.5*inch, 1.2*inch])
+            expense_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ]))
+            
+            elements.append(expense_table)
+        
+        doc.build(elements)
+        
+        return FileResponse(
+            tmp_file.name,
+            media_type='application/pdf',
+            filename=f"relatorio_financeiro_{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}.pdf"
+        )
+
 # Dashboard data
 @api_router.get("/dashboard")
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
