@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 import { Separator } from "./components/ui/separator";
 import { toast, Toaster } from "sonner";
+import { Calendar } from "./components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "./components/ui/popover";
 import { 
   PlusCircle, 
   DollarSign, 
@@ -22,10 +24,17 @@ import {
   Edit,
   Sparkles,
   Target,
-  Calendar,
+  Calendar as CalendarIcon,
   User,
-  LogOut
+  LogOut,
+  Download,
+  Wallet,
+  TrendingDown,
+  Repeat,
+  FileText
 } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -36,6 +45,7 @@ axios.defaults.headers.common['Authorization'] = '';
 function App() {
   const [user, setUser] = useState(null);
   const [expenses, setExpenses] = useState([]);
+  const [installmentExpenses, setInstallmentExpenses] = useState([]);
   const [dashboardData, setDashboardData] = useState({});
   const [insights, setInsights] = useState("");
   const [predictions, setPredictions] = useState("");
@@ -55,6 +65,27 @@ function App() {
     category: ""
   });
 
+  const [installmentForm, setInstallmentForm] = useState({
+    description: "",
+    total_amount: "",
+    installments: "",
+    category: ""
+  });
+
+  const [salaryForm, setSalaryForm] = useState({
+    salary: ""
+  });
+
+  // Date picker states
+  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [endDate, setEndDate] = useState(new Date());
+  const [periodReport, setPeriodReport] = useState(null);
+
+  // Modal states
+  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
+
   // Check if user is logged in
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -68,8 +99,10 @@ function App() {
     try {
       await Promise.all([
         loadExpenses(),
+        loadInstallmentExpenses(),
         loadDashboardData(),
-        loadInsights()
+        loadInsights(),
+        loadSalary()
       ]);
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -85,6 +118,15 @@ function App() {
       setExpenses(response.data);
     } catch (error) {
       console.error('Error loading expenses:', error);
+    }
+  };
+
+  const loadInstallmentExpenses = async () => {
+    try {
+      const response = await axios.get(`${API}/installment-expenses`);
+      setInstallmentExpenses(response.data);
+    } catch (error) {
+      console.error('Error loading installment expenses:', error);
     }
   };
 
@@ -107,6 +149,15 @@ function App() {
       setPredictions(predictionsRes.data.predictions);
     } catch (error) {
       console.error('Error loading AI insights:', error);
+    }
+  };
+
+  const loadSalary = async () => {
+    try {
+      const response = await axios.get(`${API}/user/salary`);
+      setSalaryForm({ salary: response.data.salary.toString() });
+    } catch (error) {
+      console.error('Error loading salary:', error);
     }
   };
 
@@ -156,6 +207,7 @@ function App() {
       
       // Reset form
       setExpenseForm({ description: "", amount: "", category: "" });
+      setIsExpenseModalOpen(false);
       
       // Reload data
       await loadUserData();
@@ -163,6 +215,55 @@ function App() {
       toast.success("Gasto adicionado com sucesso!");
     } catch (error) {
       toast.error("Erro ao adicionar gasto");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddInstallmentExpense = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const data = {
+        description: installmentForm.description,
+        total_amount: parseFloat(installmentForm.total_amount),
+        installments: parseInt(installmentForm.installments),
+        category: installmentForm.category || null
+      };
+      
+      await axios.post(`${API}/installment-expenses`, data);
+      
+      // Reset form
+      setInstallmentForm({ description: "", total_amount: "", installments: "", category: "" });
+      setIsInstallmentModalOpen(false);
+      
+      // Reload data
+      await loadUserData();
+      
+      toast.success("Gasto parcelado adicionado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao adicionar gasto parcelado");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSalary = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await axios.put(`${API}/user/salary`, {
+        salary: parseFloat(salaryForm.salary)
+      });
+      
+      setIsSalaryModalOpen(false);
+      await loadDashboardData();
+      
+      toast.success("Salário atualizado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao atualizar salário");
     } finally {
       setLoading(false);
     }
@@ -178,14 +279,57 @@ function App() {
     }
   };
 
+  const loadPeriodReport = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/reports/period`, {
+        params: {
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString()
+        }
+      });
+      setPeriodReport(response.data);
+    } catch (error) {
+      toast.error("Erro ao carregar relatório");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportPDF = async () => {
+    try {
+      const response = await axios.get(`${API}/reports/export-pdf`, {
+        params: {
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString()
+        },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `relatorio_${format(startDate, 'ddMMyyyy')}_${format(endDate, 'ddMMyyyy')}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success("PDF exportado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao exportar PDF");
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     axios.defaults.headers.common['Authorization'] = '';
     setUser(null);
     setExpenses([]);
+    setInstallmentExpenses([]);
     setDashboardData({});
     setInsights("");
     setPredictions("");
+    setPeriodReport(null);
   };
 
   const formatCurrency = (value) => {
@@ -328,8 +472,42 @@ function App() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <Dialog>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Dialog open={isSalaryModalOpen} onOpenChange={setIsSalaryModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Wallet className="w-4 h-4" />
+                  Definir Salário
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Definir Salário Mensal</DialogTitle>
+                  <DialogDescription>
+                    Informe seu salário para calcular o saldo disponível
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleUpdateSalary} className="space-y-4">
+                  <div>
+                    <Label htmlFor="salary">Salário Mensal</Label>
+                    <Input
+                      id="salary"
+                      type="number"
+                      step="0.01"
+                      value={salaryForm.salary}
+                      onChange={(e) => setSalaryForm({salary: e.target.value})}
+                      placeholder="0,00"
+                      required
+                    />
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Salvando..." : "Salvar Salário"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isExpenseModalOpen} onOpenChange={setIsExpenseModalOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700">
                   <PlusCircle className="w-4 h-4 mr-2" />
@@ -375,11 +553,75 @@ function App() {
                       placeholder="Deixe vazio para categorização automática"
                     />
                   </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button type="submit" disabled={loading} className="flex-1">
-                      {loading ? "Adicionando..." : "Adicionar Gasto"}
-                    </Button>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Adicionando..." : "Adicionar Gasto"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isInstallmentModalOpen} onOpenChange={setIsInstallmentModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Repeat className="w-4 h-4" />
+                  Gasto Parcelado
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Adicionar Gasto Parcelado</DialogTitle>
+                  <DialogDescription>
+                    Crie parcelas automáticas para os próximos meses
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddInstallmentExpense} className="space-y-4">
+                  <div>
+                    <Label htmlFor="inst_description">Descrição</Label>
+                    <Input
+                      id="inst_description"
+                      value={installmentForm.description}
+                      onChange={(e) => setInstallmentForm({...installmentForm, description: e.target.value})}
+                      placeholder="Ex: Compra no cartão"
+                      required
+                    />
                   </div>
+                  <div>
+                    <Label htmlFor="total_amount">Valor Total</Label>
+                    <Input
+                      id="total_amount"
+                      type="number"
+                      step="0.01"
+                      value={installmentForm.total_amount}
+                      onChange={(e) => setInstallmentForm({...installmentForm, total_amount: e.target.value})}
+                      placeholder="0,00"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="installments">Número de Parcelas</Label>
+                    <Input
+                      id="installments"
+                      type="number"
+                      min="2"
+                      max="48"
+                      value={installmentForm.installments}
+                      onChange={(e) => setInstallmentForm({...installmentForm, installments: e.target.value})}
+                      placeholder="12"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="inst_category">Categoria (opcional)</Label>
+                    <Input
+                      id="inst_category"
+                      value={installmentForm.category}
+                      onChange={(e) => setInstallmentForm({...installmentForm, category: e.target.value})}
+                      placeholder="Deixe vazio para categorização automática"
+                    />
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? "Adicionando..." : "Adicionar Gasto Parcelado"}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -392,15 +634,39 @@ function App() {
         </div>
 
         {/* Dashboard Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Gasto</CardTitle>
-              <DollarSign className="h-4 w-4 text-emerald-600" />
+              <CardTitle className="text-sm font-medium text-gray-600">Salário</CardTitle>
+              <Wallet className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">
-                {formatCurrency(dashboardData.total_spent || 0)}
+                {formatCurrency(dashboardData.salary || 0)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Saldo Atual</CardTitle>
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${(dashboardData.current_balance || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCurrency(dashboardData.current_balance || 0)}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Gasto do Mês</CardTitle>
+              <TrendingDown className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-900">
+                {formatCurrency(dashboardData.current_month_spent || 0)}
               </div>
             </CardContent>
           </Card>
@@ -408,23 +674,11 @@ function App() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Total de Gastos</CardTitle>
-              <CreditCard className="h-4 w-4 text-blue-600" />
+              <CreditCard className="h-4 w-4 text-purple-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">
                 {dashboardData.total_expenses || 0}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Categorias</CardTitle>
-              <BarChart3 className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
-                {Object.keys(dashboardData.categories || {}).length}
               </div>
             </CardContent>
           </Card>
@@ -444,10 +698,12 @@ function App() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="expenses" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-96">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
             <TabsTrigger value="expenses">Gastos</TabsTrigger>
+            <TabsTrigger value="installments">Parcelados</TabsTrigger>
             <TabsTrigger value="insights">Insights IA</TabsTrigger>
             <TabsTrigger value="analytics">Análises</TabsTrigger>
+            <TabsTrigger value="reports">Relatórios</TabsTrigger>
           </TabsList>
           
           <TabsContent value="expenses" className="space-y-6">
@@ -490,6 +746,51 @@ function App() {
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="installments" className="space-y-6">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Repeat className="w-5 h-5" />
+                  Gastos Parcelados
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {installmentExpenses.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-4">Nenhum gasto parcelado registrado</p>
+                    <p className="text-sm text-gray-400">Crie gastos parcelados para projetar despesas futuras!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {installmentExpenses.map((installment) => (
+                      <div key={installment.id} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <p className="font-medium text-gray-900">{installment.description}</p>
+                            <Badge className={getCategoryColor(installment.category)}>
+                              {installment.category}
+                            </Badge>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-gray-900">
+                              {formatCurrency(installment.total_amount)}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {installment.installments}x de {formatCurrency(installment.monthly_amount)}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Criado em: {formatDate(installment.created_at)}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -583,6 +884,117 @@ function App() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="reports" className="space-y-6">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Relatório por Período
+                </CardTitle>
+                <CardDescription>
+                  Selecione um período para gerar relatório detalhado
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Data Início</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {startDate ? format(startDate, "PPP", { locale: ptBR }) : "Selecione a data"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar mode="single" selected={startDate} onSelect={setStartDate} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  
+                  <div>
+                    <Label>Data Fim</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {endDate ? format(endDate, "PPP", { locale: ptBR }) : "Selecione a data"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar mode="single" selected={endDate} onSelect={setEndDate} />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <Button onClick={loadPeriodReport} disabled={loading} className="flex-1">
+                    {loading ? "Carregando..." : "Gerar Relatório"}
+                  </Button>
+                  <Button onClick={exportPDF} variant="outline" className="gap-2">
+                    <Download className="w-4 h-4" />
+                    Exportar PDF
+                  </Button>
+                </div>
+
+                {periodReport && (
+                  <div className="mt-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold">{formatCurrency(periodReport.total_spent)}</div>
+                          <p className="text-xs text-muted-foreground">Total Gasto</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold">{periodReport.total_expenses}</div>
+                          <p className="text-xs text-muted-foreground">Número de Gastos</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold">{Object.keys(periodReport.categories).length}</div>
+                          <p className="text-xs text-muted-foreground">Categorias</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Gastos do Período</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {periodReport.expenses.slice(0, 10).map((expense) => (
+                            <div key={expense.id} className="flex justify-between items-center py-2 border-b">
+                              <div>
+                                <p className="font-medium">{expense.description}</p>
+                                <p className="text-sm text-gray-500">{formatDate(expense.date)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold">{formatCurrency(expense.amount)}</p>
+                                <Badge className={getCategoryColor(expense.category)} size="sm">
+                                  {expense.category}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                          {periodReport.expenses.length > 10 && (
+                            <p className="text-sm text-gray-500 text-center pt-2">
+                              E mais {periodReport.expenses.length - 10} gastos...
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
