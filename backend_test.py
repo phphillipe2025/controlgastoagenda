@@ -1,7 +1,7 @@
 import requests
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 class ExpenseTrackerAPITester:
@@ -12,7 +12,7 @@ class ExpenseTrackerAPITester:
         self.tests_passed = 0
         self.user_id = None
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
+    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None, params=None, response_type='json'):
         """Run a single API test"""
         url = f"{self.base_url}/{endpoint}"
         test_headers = {'Content-Type': 'application/json'}
@@ -25,11 +25,15 @@ class ExpenseTrackerAPITester:
 
         self.tests_run += 1
         print(f"\n🔍 Testing {name}...")
-        print(f"   URL: {url}")
+        print(f"   URL: {method} {url}")
+        if data:
+            print(f"   Data: {data}")
+        if params:
+            print(f"   Params: {params}")
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=test_headers, timeout=30)
+                response = requests.get(url, headers=test_headers, params=params, timeout=30)
             elif method == 'POST':
                 response = requests.post(url, json=data, headers=test_headers, timeout=30)
             elif method == 'PUT':
@@ -37,16 +41,23 @@ class ExpenseTrackerAPITester:
             elif method == 'DELETE':
                 response = requests.delete(url, headers=test_headers, timeout=30)
 
+            print(f"   Status: {response.status_code}")
+            
             success = response.status_code == expected_status
             if success:
                 self.tests_passed += 1
                 print(f"✅ Passed - Status: {response.status_code}")
-                try:
-                    response_data = response.json()
-                    print(f"   Response: {json.dumps(response_data, indent=2)[:200]}...")
-                    return True, response_data
-                except:
-                    return True, {}
+                
+                if response_type == 'json':
+                    try:
+                        response_data = response.json()
+                        print(f"   Response: {json.dumps(response_data, indent=2)[:200]}...")
+                        return True, response_data
+                    except:
+                        return True, {}
+                else:
+                    print(f"   Response type: {response.headers.get('content-type', 'unknown')}")
+                    return True, response.content
             else:
                 print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
                 try:
