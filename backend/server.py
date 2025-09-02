@@ -126,7 +126,10 @@ def parse_from_mongo(data):
     if isinstance(data, dict):
         parsed = {}
         for key, value in data.items():
-            if key.endswith('_at') or key == 'date':
+            # Skip MongoDB's _id field to avoid ObjectId serialization issues
+            if key == '_id':
+                continue
+            elif key.endswith('_at') or key == 'date':
                 if isinstance(value, str):
                     try:
                         parsed[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
